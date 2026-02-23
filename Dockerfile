@@ -1,26 +1,33 @@
-# -------- Build stage --------
+# ==============================
+# Build Stage
+# ==============================
 FROM eclipse-temurin:21-jdk AS builder
 WORKDIR /app
 
-# Copy Gradle wrapper and build files first for caching
-COPY gradlew .
-COPY gradle gradle
-COPY build.gradle settings.gradle ./
-
-RUN chmod +x gradlew
-RUN ./gradlew dependencies --no-daemon
-
-# Copy the **entire project**, including src and resources
+# Copy entire multi-module project
 COPY . .
 
-# Build the JAR with resources
-RUN ./gradlew clean bootJar --no-daemon
 
-# -------- Runtime stage --------
+# Make Gradle executable
+RUN chmod +x gradlew
+
+# Build ONLY booking service
+RUN ./gradlew :travel-booking-service:bootJar --no-daemon
+
+# ==============================
+# Runtime Stage
+# ==============================
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
-COPY --from=builder /app/build/libs/*.jar app.jar
 
-ENV JAVA_OPTS="-Xms256m -Xmx512m"
+# Copy built jar from module
+COPY --from=builder /app/travel-booking-service/build/libs/*.jar app.jar
+
+
+
+# JVM optimization for containers
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+EXPOSE 8083
+
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
