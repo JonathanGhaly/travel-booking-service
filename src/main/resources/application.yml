@@ -26,13 +26,47 @@ spring:
     baseline-on-migrate: true
   cache:
     type: redis
-
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8080/realms/travel-app
   data:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       timeout: 2000ms
+  kafka:
+    bootstrap-servers: localhost:9092
 
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+      acks: all
+      retries: 3
+
+      properties:
+        spring:
+          json:
+            add:
+              type:
+                headers: false
+
+    consumer:
+      group-id: booking-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+
+      properties:
+        spring:
+          json:
+            trusted:
+              packages: "*"
+
+    listener:
+      ack-mode: record
 management:
   endpoints:
     web:

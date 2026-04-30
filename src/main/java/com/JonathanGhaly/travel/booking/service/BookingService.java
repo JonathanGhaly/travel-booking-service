@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.UUID;
 
 public interface BookingService {
-
+    // CRUD operations User Specified
     BookingResponseDto create(BookingRequestDto bookingRequestDto);
     BookingResponseDto update(UUID id, BookingRequestDto bookingRequestDto);
     BookingResponseDto patch(UUID id, BookingRequestDto bookingRequestDto);

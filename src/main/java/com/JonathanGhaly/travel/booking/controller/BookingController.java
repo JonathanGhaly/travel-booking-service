@@ -3,8 +3,11 @@ package com.JonathanGhaly.travel.booking.controller;
 import com.JonathanGhaly.travel.booking.dto.BookingRequestDto;
 import com.JonathanGhaly.travel.booking.dto.BookingResponseDto;
 import com.JonathanGhaly.travel.booking.service.BookingService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -15,48 +18,45 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class BookingController {
 
-    private final BookingService bookingService;
+    private final @Qualifier("userBookingService") BookingService bookingService;
 
-    @GetMapping
-    public List<BookingResponseDto> getBookings(
-            @RequestParam(required = false) UUID userId,
-            @RequestParam(required = false) UUID poiId) {
 
-        if (userId != null && poiId != null) {
-            return bookingService.getByUserIdAndPoiId(userId, poiId);
-        }
-
-        if (userId != null) {
-            return bookingService.getByUserId(userId);
-        }
-
-        if (poiId != null) {
-            return bookingService.getByPoiId(poiId);
-        }
-
+    @GetMapping("/user")
+    public List<BookingResponseDto> getMyBookings() {
         return bookingService.getAll();
     }
-    @GetMapping("/{id}")
-    public BookingResponseDto findById(@PathVariable UUID id) {
+
+    @GetMapping("/user/{id}")
+    public BookingResponseDto getMyBookingById(@PathVariable UUID id) {
         return bookingService.getById(id);
     }
-    @PostMapping
-    public BookingResponseDto create(@RequestBody BookingRequestDto bookingRequestDto) {
+
+    @GetMapping("user/by-poi")
+    public List<BookingResponseDto> getMyBookingsByPoi(@RequestParam UUID poiId) {
+        return bookingService.getByPoiId(poiId);
+    }
+
+    @PostMapping("/user")
+    public BookingResponseDto createBooking(@RequestBody @Valid BookingRequestDto bookingRequestDto) {
         return bookingService.create(bookingRequestDto);
     }
-    @PutMapping("/{id}")
-    public BookingResponseDto update(@PathVariable UUID id, @RequestBody BookingRequestDto bookingRequestDto) {
+
+    @PutMapping("/user/{id}")
+    public BookingResponseDto updateBooking(@PathVariable UUID id,
+                                            @RequestBody @Valid BookingRequestDto bookingRequestDto) {
         return bookingService.update(id, bookingRequestDto);
     }
-    @PatchMapping("/{id}")
-    public BookingResponseDto patch(@PathVariable UUID id, @RequestBody BookingRequestDto bookingRequestDto) {
+
+    @PatchMapping("/user/{id}")
+    public BookingResponseDto patchBooking(@PathVariable UUID id,
+                                           @RequestBody BookingRequestDto bookingRequestDto) {
         return bookingService.patch(id, bookingRequestDto);
     }
-    @DeleteMapping("/{id}")
+
+    @DeleteMapping("/user/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable UUID id) {
+    public void deleteBooking(@PathVariable UUID id) {
         bookingService.delete(id);
     }
+
 }
-
-

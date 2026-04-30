@@ -9,14 +9,10 @@ import com.JonathanGhaly.travel.booking.kafka.publisher.BookingEventPublisher;
 import com.JonathanGhaly.travel.booking.mapper.BookingMapper;
 import com.JonathanGhaly.travel.booking.repository.BookingRepository;
 import com.JonathanGhaly.travel.booking.service.BookingService;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -24,8 +20,8 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-@Qualifier("userBookingService")
-public class BookingServiceImpl implements BookingService {
+@Qualifier("adminBookingService")
+public class AdminBookingServiceImpl implements BookingService {
     private final BookingRepository bookingRepository;
     private final BookingMapper mapper;
     private final BookingEventPublisher bookingPublisher;
@@ -33,10 +29,8 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @CacheEvict(value = "bookings", allEntries = true)
     public BookingResponseDto create(BookingRequestDto bookingRequestDto) {
-        String userId = getCurrentUserId();
-        Booking booking = mapper.toEntity(bookingRequestDto);
-        booking.setUserId(UUID.fromString(userId)); // enforce ownership
-        Booking saved = bookingRepository.save(booking);
+        Booking entity = mapper.toEntity(bookingRequestDto);
+        Booking saved = bookingRepository.save(entity);
 
         bookingPublisher.publish(new BookingEventDto(
                 saved.getId(),
@@ -45,22 +39,16 @@ public class BookingServiceImpl implements BookingService {
                 "CREATED",
                 System.currentTimeMillis()
         ));
-
         return mapper.toDto(saved);
     }
 
     @Override
     @CacheEvict(value = "bookings", allEntries = true)
     public BookingResponseDto update(UUID id, BookingRequestDto bookingRequestDto) {
-        String userId = getCurrentUserId();
         Booking existing = bookingRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
+                .orElseThrow(()-> new ResourceNotFoundException("Booking not found with id: " + id));
 
-
-        if (!existing.getUserId().toString().equals(userId)) {
-            throw new ResourceNotFoundException("Booking not found for current user");
-        }
-
+        existing.setUserId(bookingRequestDto.getUserId());
         existing.setPoiId(bookingRequestDto.getPoiId());
         existing.setStatus(bookingRequestDto.getBookingStatus());
         existing.setBookingTime(bookingRequestDto.getBookingTime());
@@ -77,19 +65,22 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    @CacheEvict(value = { "booking-poi", "booking-single"}, allEntries = true)
+    @CacheEvict(value = {"booking-user", "booking-poi", "booking-single"}, allEntries = true)
     public BookingResponseDto patch(UUID id, BookingRequestDto bookingRequestDto) {
-        String userId = getCurrentUserId();
         Booking existing = bookingRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
-
-        if (!existing.getUserId().toString().equals(userId)) {
-            throw new ResourceNotFoundException("Booking not found for current user");
+                .orElseThrow(()-> new ResourceNotFoundException("Booking not found with id: " + id));
+        if(bookingRequestDto.getUserId()!= null){
+            existing.setUserId(bookingRequestDto.getUserId());
         }
-
-        if (bookingRequestDto.getPoiId() != null) existing.setPoiId(bookingRequestDto.getPoiId());
-        if (bookingRequestDto.getBookingStatus() != null) existing.setStatus(bookingRequestDto.getBookingStatus());
-        if (bookingRequestDto.getBookingTime() != null) existing.setBookingTime(bookingRequestDto.getBookingTime());
+        if(bookingRequestDto.getPoiId()!= null){
+            existing.setPoiId(bookingRequestDto.getPoiId());
+        }
+        if(bookingRequestDto.getBookingStatus()!= null){
+            existing.setStatus(bookingRequestDto.getBookingStatus());
+        }
+        if (bookingRequestDto.getBookingTime()!= null){
+            existing.setBookingTime(bookingRequestDto.getBookingTime());
+        }
         Booking saved = bookingRepository.save(existing);
 
         bookingPublisher.publish(new BookingEventDto(
@@ -103,39 +94,34 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    @Cacheable(value = "booking-single",key = "#id")
+    @Cacheable(value = "booking-single", key = "#id")
     public BookingResponseDto getById(UUID id) {
-        String userId = getCurrentUserId();
-        Booking existing = bookingRepository.findById(id)
+        Booking entity = bookingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
-
-        if (!existing.getUserId().toString().equals(userId)) {
-            throw new ResourceNotFoundException("Booking not found for current user");
-        }
-
-        return mapper.toDto(existing);
+        return mapper.toDto(entity);
     }
 
     @Override
     public List<BookingResponseDto> getAll() {
-        String userId = getCurrentUserId();
-        return bookingRepository.findByUserId(UUID.fromString(userId))
+        return bookingRepository.findAll()
                 .stream()
                 .map(mapper::toDto)
                 .toList();
     }
 
-
     @Override
+    @Cacheable(value = "booking-user", key="#userId")
     public List<BookingResponseDto> getByUserId(UUID userId) {
-        throw new UnsupportedOperationException();
+        return bookingRepository.findByUserId(userId)
+                .stream()
+                .map(mapper::toDto)
+                .toList();
     }
 
     @Override
     @Cacheable(value = "booking-poi",key = "#poiId")
     public List<BookingResponseDto> getByPoiId(UUID poiId) {
-        String userId = getCurrentUserId();
-        return bookingRepository.findByUserIdAndPoiId(UUID.fromString(userId),poiId)
+        return bookingRepository.findByPoiId(poiId)
                 .stream()
                 .map(mapper::toDto)
                 .toList();
@@ -143,35 +129,24 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     public List<BookingResponseDto> getByUserIdAndPoiId(UUID userId, UUID poiId) {
-        throw new UnsupportedOperationException();
+        return bookingRepository.findByUserIdAndPoiId(userId,poiId)
+                .stream()
+                .map(mapper::toDto)
+                .toList();
     }
 
     @Override
-    @CacheEvict(value = {"booking-poi", "booking-single"}, allEntries = true)
+    @CacheEvict(value = {"booking-user", "booking-poi", "booking-single"}, allEntries = true)
     public void delete(UUID id) {
-        String userId = getCurrentUserId();
-        Booking existing = bookingRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
-
-        if (!existing.getUserId().toString().equals(userId)) {
-            throw new ResourceNotFoundException("Booking not found for current user");
-        }
-        bookingRepository.delete(existing);
-
+        Booking booking = bookingRepository.findById(id).orElseThrow(()-> new ResourceNotFoundException("Booking not found with id: " + id));
+        bookingRepository.deleteById(id);
         bookingPublisher.publish(new BookingEventDto(
-                existing.getId(),
-                existing.getUserId(),
-                existing.getPoiId(),
+                booking.getId(),
+                booking.getUserId(),
+                booking.getPoiId(),
                 "DELETED",
                 System.currentTimeMillis()
         ));
     }
 
-    private String getCurrentUserId() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth instanceof JwtAuthenticationToken jwtAuth) {
-            return jwtAuth.getToken().getSubject(); // subject = userId
-        }
-        throw new IllegalStateException("Cannot get current user");
-    }
 }
